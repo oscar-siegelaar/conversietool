@@ -119,3 +119,12 @@ def test_full_document(export, tmp_path):
     chars = {r.cells[0].text: [c.text for c in r.cells] for r in d.tables[2].rows[1:]}
     assert chars["Anna"][1:3] == ["Anne", "V"]
     assert chars["Koor"][2] == "MV"
+
+
+def test_convert_folder(export, tmp_path):
+    from iyuno_converter.pipeline import convert_folder
+    (export.parent / "broken.xlsx").write_text("not excel")
+    out_dir, report = convert_folder(export.parent, tmp_path / "out")
+    assert (out_dir / (export.stem + ".docx")).exists()
+    assert (out_dir / "rapport.txt").exists()
+    assert sorted(r.split()[0] for r in report) == ["FOUT", "OK"]

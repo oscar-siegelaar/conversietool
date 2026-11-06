@@ -8,7 +8,7 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import __version__
 from .convert import gender_code
-from .pipeline import convert, default_cover, default_output_name
+from .pipeline import convert, convert_folder, default_cover, default_output_name
 from .reader import Episode, read_export
 
 COVER_FIELDS = [
@@ -76,6 +76,7 @@ class App:
         self.status.pack(side="left")
         self.go = ttk.Button(bottom, text="Make Word document…", command=self.save, state="disabled")
         self.go.pack(side="right")
+        ttk.Button(bottom, text="Convert whole folder…", command=self.batch).pack(side="right", padx=8)
 
     # ------------------------------------------------------------ loading
     def _enable_drop(self):
@@ -169,6 +170,24 @@ class App:
         if warnings:
             msg += "\n\nNote:\n- " + "\n- ".join(warnings)
         messagebox.showinfo("Done", msg)
+
+
+def _batch(app: "App"):
+    folder = filedialog.askdirectory(title="Folder with SyncScript exports (.xlsx)")
+    if not folder:
+        return
+    app.status.configure(text="Converting…")
+    app.root.update_idletasks()
+    out_dir, report = convert_folder(folder)
+    ok = sum(1 for r in report if r.startswith("OK"))
+    app.status.configure(text=f"{ok} of {len(report)} converted")
+    messagebox.showinfo(
+        "Folder converted",
+        f"{ok} of {len(report)} files converted.\n\nOutput and rapport.txt are in:\n{out_dir}",
+    )
+
+
+App.batch = _batch
 
 
 def run():

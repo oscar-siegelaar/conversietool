@@ -13,11 +13,18 @@ def main(argv=None):
     from .pipeline import convert, default_cover
     from .reader import read_export
     ap = argparse.ArgumentParser(prog="iyuno-converter")
-    ap.add_argument("export")
+    ap.add_argument("export", help="export .xlsx, or a folder to convert every export in it")
     ap.add_argument("-o", "--output")
     ap.add_argument("--auth-code", default="")
     ap.add_argument("--language", default="Dutch")
     a = ap.parse_args(argv)
+    from pathlib import Path
+    if Path(a.export).is_dir():
+        from .pipeline import convert_folder
+        out_dir, report = convert_folder(a.export, a.output)
+        print("\n".join(report))
+        print(out_dir)
+        return
     ep = read_export(a.export)
     cover = default_cover(ep)
     cover.auth_code, cover.language = a.auth_code, a.language

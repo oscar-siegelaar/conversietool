@@ -34,10 +34,15 @@ translators do today, so neither Word nor the macro is needed.
 
 ## Use
 
+The window has a **Convert whole folder…** button for test runs. It converts every
+`.xlsx` in a folder into a subfolder `iyuno-word` and writes `rapport.txt` with one line
+per file.
+
 ```bash
 pip install -e .            # or: pip install openpyxl python-docx
 python -m iyuno_converter                 # opens the window
 python -m iyuno_converter export.xlsx --auth-code CODE -o out.docx   # command line
+python -m iyuno_converter path/to/folder   # every export in a folder, plus rapport.txt
 ```
 
 For drag and drop in the window, also install `tkinterdnd2` (`pip install -e .[dnd]`).
