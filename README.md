@@ -52,6 +52,7 @@ Without it, click the box to choose a file.
 
 ```bash
 ./build.sh        # macOS: dist/Iyuno Converter.app (built for the Mac it runs on)
+./make_dmg.sh     # macOS: wrap the app in a drag-to-install .dmg
 build.ps1         # Windows: dist\Iyuno Converter.exe
 ```
 
