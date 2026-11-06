@@ -1,0 +1,41 @@
+name: Iyuno converter
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install openpyxl python-docx pytest
+      - run: python -m pytest -q tests
+
+  build:
+    needs: test
+    if: github.event_name == 'workflow_dispatch'
+    strategy:
+      matrix:
+        include:
+          - { os: macos-14, name: mac-apple-silicon }
+          - { os: macos-13, name: mac-intel }
+          - { os: windows-latest, name: windows }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - if: runner.os == 'macOS'
+        run: ./build.sh && cd dist && ditto -c -k --keepParent "Iyuno Converter.app" "Iyuno-Converter-${{ matrix.name }}.zip"
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./build.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iyuno-converter-${{ matrix.name }}
+          path: |
+            dist/*.zip
+            dist/*.exe

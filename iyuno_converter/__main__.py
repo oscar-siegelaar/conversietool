@@ -1,0 +1,31 @@
+"""Command line: python -m iyuno_converter EXPORT.xlsx [-o OUT.docx] [--auth-code CODE].
+Without arguments the window opens."""
+import argparse
+import sys
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    argv = [a for a in argv if not a.startswith("-psn")]  # macOS Finder launch
+    if not argv:
+        from .gui import run
+        return run()
+    from .pipeline import convert, default_cover
+    from .reader import read_export
+    ap = argparse.ArgumentParser(prog="iyuno-converter")
+    ap.add_argument("export")
+    ap.add_argument("-o", "--output")
+    ap.add_argument("--auth-code", default="")
+    ap.add_argument("--language", default="Dutch")
+    a = ap.parse_args(argv)
+    ep = read_export(a.export)
+    cover = default_cover(ep)
+    cover.auth_code, cover.language = a.auth_code, a.language
+    out, warnings = convert(a.export, a.output, cover, ep)
+    for w in warnings:
+        print("Let op:", w)
+    print(out)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
