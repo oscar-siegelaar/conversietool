@@ -58,7 +58,7 @@ build.ps1         # Windows: dist\Iyuno Converter.exe
 An Apple Silicon Mac builds an arm64 app, and an Intel Mac (for example the iMac on
 Ventura) builds an x86_64 app. The apps are not signed. On first launch on a Mac,
 right-click the app and choose **Open**. The workflow
-`.github/workflows/build.yml` builds all three: run it by hand from the Actions tab (Run workflow).
+`.github/workflows/build.yml` builds all three: on every pull request, or by hand from the Actions tab (Run workflow).
 
 ## Tests
 
