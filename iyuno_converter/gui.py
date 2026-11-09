@@ -10,6 +10,7 @@ from . import __version__
 from .convert import gender_code
 from .pipeline import convert, convert_folder, default_cover, default_output_name
 from .reader import Episode, read_export
+from .settings import DEFAULT_FIELDS, load_defaults, save_defaults, settings_path
 
 COVER_FIELDS = [
     ("original_title", "Original title"),
@@ -33,6 +34,7 @@ class App:
         self.ep: Episode | None = None
         root.title(f"SyncScript → Iyuno Word  v{__version__}")
         root.geometry("900x680")
+        self._build_menu()
 
         top = ttk.Frame(root, padding=10)
         top.pack(fill="x")
@@ -80,6 +82,60 @@ class App:
         self.clear_btn = ttk.Button(bottom, text="Cancel / other file", command=self.reset, state="disabled")
         self.clear_btn.pack(side="right")
 
+    # ------------------------------------------------------------ settings
+    def _build_menu(self):
+        menubar = tk.Menu(self.root)
+        settings = tk.Menu(menubar, tearoff=0)
+        settings.add_command(label="Cover page defaults…", command=self.edit_defaults)
+        menubar.add_cascade(label="Settings", menu=settings)
+        self.root.config(menu=menubar)
+        try:  # macOS: also under the app menu as Settings… (Cmd+,)
+            self.root.createcommand("tk::mac::ShowPreferences", self.edit_defaults)
+        except tk.TclError:
+            pass
+
+    def edit_defaults(self):
+        """Window to save default values for the cover page."""
+        win = tk.Toplevel(self.root)
+        win.title("Cover page defaults")
+        win.transient(self.root)
+        win.resizable(False, False)
+        frame = ttk.Frame(win, padding=12)
+        frame.pack(fill="both", expand=True)
+        ttk.Label(
+            frame,
+            text="These values are filled in on every cover page. A filled-in default\n"
+                 "replaces what the export says; leave a field empty to keep the export's value.",
+            justify="left",
+        ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
+        current = load_defaults()
+        values: dict[str, tk.StringVar] = {}
+        for i, (key, label) in enumerate(DEFAULT_FIELDS, start=1):
+            ttk.Label(frame, text=label).grid(row=i, column=0, sticky="w", padx=4, pady=2)
+            v = tk.StringVar(value=current.get(key, ""))
+            ttk.Entry(frame, textvariable=v, width=40).grid(row=i, column=1, sticky="we", padx=4, pady=2)
+            values[key] = v
+
+        def save():
+            data = {k: v.get() for k, v in values.items()}
+            try:
+                save_defaults(data)
+            except OSError as exc:
+                messagebox.showerror("Cannot save settings", f"{settings_path()}\n\n{exc}", parent=win)
+                return
+            if self.ep:  # show the new defaults in the open script right away
+                for key, value in data.items():
+                    if value.strip():
+                        self.vars[key].set(value.strip())
+            win.destroy()
+
+        buttons = ttk.Frame(frame)
+        buttons.grid(row=len(DEFAULT_FIELDS) + 1, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        ttk.Button(buttons, text="Cancel", command=win.destroy).pack(side="right")
+        ttk.Button(buttons, text="Save", command=save).pack(side="right", padx=6)
+        win.bind("<Escape>", lambda e: win.destroy())
+        win.grab_set()
+
     # ------------------------------------------------------------ loading
     DROP_TEXT = "Drop a SyncScript export (.xlsx) here, or click to choose one"
 
@@ -115,7 +171,7 @@ class App:
             return
         self.src, self.ep = Path(path), ep
         self.drop.configure(text=f"{self.src.name}  –  {len(ep.rows)} rows   (click to choose another file)")
-        cover = default_cover(ep)
+        cover = default_cover(ep, load_defaults())
         for key, _ in COVER_FIELDS:
             self.vars[key].set(getattr(cover, key))
         self.tree.delete(*self.tree.get_children())
@@ -160,6 +216,7 @@ class App:
         cover = default_cover(self.ep)
         for key, _ in COVER_FIELDS:
             setattr(cover, key, self.vars[key].get().strip())
+        cover.language = cover.language or "Dutch"
         if not cover.auth_code and not messagebox.askyesno(
             "No SDI auth code", "The SDI auth code is empty. Iyuno's macro and system need it. Continue anyway?"
         ):
@@ -195,7 +252,7 @@ def _batch(app: "App"):
         return
     app.status.configure(text="Converting…")
     app.root.update_idletasks()
-    out_dir, report = convert_folder(folder)
+    out_dir, report = convert_folder(folder, defaults=load_defaults())
     ok = sum(1 for r in report if r.startswith("OK"))
     app.status.configure(text=f"{ok} of {len(report)} converted")
     messagebox.showinfo(

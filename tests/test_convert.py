@@ -176,3 +176,24 @@ def test_series_from_broken_filenames():
         ep = Episode()
         _guess_from_filename(ep, stem)
         assert (ep.series_title, ep.season, ep.episode) == expected, stem
+
+
+def test_cover_defaults_saved_and_applied(tmp_path, monkeypatch, export):
+    from iyuno_converter.pipeline import default_cover
+    from iyuno_converter.reader import read_export
+    from iyuno_converter.settings import load_defaults, save_defaults
+
+    monkeypatch.setenv("IYUNO_CONVERTER_SETTINGS", str(tmp_path / "s" / "settings.json"))
+    assert load_defaults() == {}
+    save_defaults({"translated_series_title": "Mijn Serie", "language": "Flemish",
+                   "season": "", "auth_code": "never stored"})
+    defaults = load_defaults()
+    assert defaults == {"translated_series_title": "Mijn Serie", "language": "Flemish"}
+
+    ep = read_export(export)
+    cover = default_cover(ep, defaults)
+    assert cover.translated_series_title == "Mijn Serie"
+    assert cover.language == "Flemish"
+    assert cover.season == ep.season            # empty default keeps the export value
+    assert cover.translated_by == ep.translator
+    assert cover.auth_code == ""

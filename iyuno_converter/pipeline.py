@@ -9,8 +9,9 @@ from .reader import Episode, read_export
 from .writer import CoverInfo, write_document
 
 
-def default_cover(ep: Episode) -> CoverInfo:
-    return CoverInfo(
+def default_cover(ep: Episode, defaults: dict[str, str] | None = None) -> CoverInfo:
+    """Cover data from the export. A filled-in saved default (Settings) wins."""
+    cover = CoverInfo(
         original_title=ep.original_title,
         translated_title=ep.translated_title,
         series_title=ep.series_title,
@@ -18,6 +19,10 @@ def default_cover(ep: Episode) -> CoverInfo:
         episode=ep.episode,
         translated_by=ep.translator,
     )
+    for key, value in (defaults or {}).items():
+        if value and hasattr(cover, key):
+            setattr(cover, key, value)
+    return cover
 
 
 def default_output_name(ep: Episode, language: str = "Dutch") -> str:
@@ -41,10 +46,12 @@ def convert(src: str | Path, out: str | Path | None = None, cover: CoverInfo | N
     return out, warnings
 
 
-def convert_folder(folder: str | Path, out_dir: str | Path | None = None) -> tuple[Path, list[str]]:
+def convert_folder(folder: str | Path, out_dir: str | Path | None = None,
+                   defaults: dict[str, str] | None = None) -> tuple[Path, list[str]]:
     """Convert every .xlsx export in a folder (for test runs on many scripts).
 
-    Cover data comes from each export; the SDI auth code stays empty. Returns the
+    Cover data comes from each export plus the saved defaults; the SDI auth code
+    stays empty. Returns the
     output folder and a report with one line per file.
     """
     folder = Path(folder)
@@ -56,7 +63,7 @@ def convert_folder(folder: str | Path, out_dir: str | Path | None = None) -> tup
             continue
         try:
             ep = read_export(src)
-            out, warnings = convert(src, out_dir / (src.stem + ".docx"), default_cover(ep), ep)
+            out, warnings = convert(src, out_dir / (src.stem + ".docx"), default_cover(ep, defaults), ep)
             notes = [w for w in warnings if "AUTH CODE" not in w]
             report.append(f"OK    {src.name}" + (f"  ({'; '.join(notes)})" if notes else ""))
         except Exception as exc:  # keep going, report the failure

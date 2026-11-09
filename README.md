@@ -38,6 +38,13 @@ The window has a **Convert whole folder…** button for test runs. It converts e
 `.xlsx` in a folder into a subfolder `iyuno-word` and writes `rapport.txt` with one line
 per file.
 
+**Settings › Cover page defaults…** (on macOS also *Settings…* in the app menu, Cmd+,)
+saves default values for series title, translated series title, season, language and
+translator. A filled-in default replaces what the export says, in the window, in folder
+conversions and on the command line. The values are kept per user in
+`~/Library/Application Support/Iyuno Converter/settings.json` (macOS) or
+`%APPDATA%\Iyuno Converter\settings.json` (Windows). The SDI auth code is never stored.
+
 ```bash
 pip install -e .            # or: pip install openpyxl python-docx
 python -m iyuno_converter                 # opens the window
