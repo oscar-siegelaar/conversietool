@@ -161,3 +161,18 @@ def test_lowercase_song_note_without_titles(tmp_path):
     assert any("titel" in w for w in warnings)
     stats = compute_statistics(rows, [1] * len(rows))
     assert stats.songs[0].tc_out == "30:49" and stats.songs[0].characters == ["Ellian"]
+
+
+def test_series_from_broken_filenames():
+    from iyuno_converter.reader import Episode, _guess_from_filename
+
+    cases = {
+        "Show A SShow AE01 Some Title": ("Show A", "", "1"),
+        "Project Name SOther Series 4E02 TITLE": ("Other Series 4", "", "2"),
+        "My Show S02E05 Title": ("My Show", "2", "5"),
+        "Sam Show SSam ShowE03 x": ("Sam Show", "", "3"),
+    }
+    for stem, expected in cases.items():
+        ep = Episode()
+        _guess_from_filename(ep, stem)
+        assert (ep.series_title, ep.season, ep.episode) == expected, stem

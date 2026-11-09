@@ -101,14 +101,28 @@ def read_export(path: str | Path) -> Episode:
 
 
 def _guess_from_filename(ep: Episode, stem: str) -> None:
-    """SyncScript names files '<series> S<season>E<episode> <title>'."""
-    m = re.search(r"S(\d+)\s*E(\d+)", stem)
-    if m:
-        ep.season, ep.episode = str(int(m.group(1))), str(int(m.group(2)))
-    else:
-        m = re.search(r"E(\d+)\b", stem)
-        if m:
-            ep.episode = str(int(m.group(1)))
-    m = re.match(r"(.+?)\s+S(?:\d+|\1)\s*E\d+", stem)  # also the broken "S<series>E44"
+    """SyncScript names files '<project> S<season>E<episode> <title>'.
+
+    Often the series name sits where the season number should be, for example
+    'Spellbound SSpellboundE01 Spellbound FTR' or
+    'Zombies Addisons Monster Mystery SZombies 4E01 ZOMBIES 4- ...'.
+    """
+    m = re.match(r"(.+?)\s+S(\d+)\s*E(\d+)\b", stem)
     if m:
         ep.series_title = m.group(1).strip()
+        ep.season, ep.episode = str(int(m.group(2))), str(int(m.group(3)))
+        return
+    m = re.search(r"(?<=\S)\s*E(\d+)\b", stem)
+    if not m:
+        return
+    ep.episode = str(int(m.group(1)))
+    prefix = stem[: m.start()]
+    splits = [(prefix[: s.start()].strip(), prefix[s.end():].strip())
+              for s in re.finditer(r"\s+S(?=\S)", prefix)]
+    for project, series in splits:
+        if project == series:
+            ep.series_title = series
+            return
+    plausible = [series for _, series in splits if series[:1].isupper() or series[:1].isdigit()]
+    if plausible:
+        ep.series_title = plausible[0]
