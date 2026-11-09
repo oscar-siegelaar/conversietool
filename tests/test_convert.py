@@ -128,3 +128,36 @@ def test_convert_folder(export, tmp_path):
     assert (out_dir / (export.stem + ".docx")).exists()
     assert (out_dir / "rapport.txt").exists()
     assert sorted(r.split()[0] for r in report) == ["FOUT", "OK"]
+
+
+@pytest.mark.parametrize("note, expected", [
+    ("Song 1 Big Song//Groot Lied 01:30", ("Song 1", "Big Song//Groot Lied", "01:30")),
+    ("song 4 30:49", ("Song 4", "", "30:49")),
+    ("{song 4 30:49}", ("Song 4", "", "30:49")),
+    ("SONG 2", ("Song 2", "", "")),
+    ("Song 3\nOrig//Lokaal\n1:02:03", ("Song 3", "Orig//Lokaal", "1:02:03")),
+    ("Songtekst nakijken", None),
+])
+def test_parse_song_note_variants(note, expected):
+    from iyuno_converter.convert import parse_song_note
+    s = parse_song_note(note)
+    assert (s and (s.mark, s.titles, s.tc_out)) == expected if expected else s is None
+
+
+def test_lowercase_song_note_without_titles(tmp_path):
+    """Real case: SyncScript export with 'song 4 30:49' first and 'Song 4' after."""
+    from iyuno_converter.reader import Episode, ScriptRow
+    ep = Episode(rows=[
+        ScriptRow("Ellian", "00:26:44", "", "(ZUCHT)"),
+        ScriptRow("Ellian", "00:27:29", "song 4 30:49", "Muren kaal, lege gangen"),
+        ScriptRow("Ellian", "00:27:52", "Song 4", "Elluk feest, de gesprekken"),
+        ScriptRow("Ellian", "00:30:40", "", "(BLAZEN)"),
+    ])
+    rows, warnings = transform(ep)
+    assert rows[1].note == "Song 4\n\n30:49"       # three paragraphs, empty title line
+    assert rows[2].note == "Song 4"
+    assert rows[3].note == ""
+    assert not any("TC Out" in w for w in warnings)
+    assert any("titel" in w for w in warnings)
+    stats = compute_statistics(rows, [1] * len(rows))
+    assert stats.songs[0].tc_out == "30:49" and stats.songs[0].characters == ["Ellian"]

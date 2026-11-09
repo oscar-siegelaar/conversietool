@@ -17,9 +17,8 @@ SONG_TOKEN = "Song "
 WORDS_PER_LINE = 8
 GENDER_CODES = {"male": "M", "female": "V", "male-female": "MV", "female-male": "MV"}
 
-_SONG_NOTE = re.compile(
-    r"^(Song\s+\d+)\s*(.*?)\s*((?:\d{1,2}:)?\d{1,2}:\d{2})?\s*$", re.S
-)
+_SONG_START = re.compile(r"^\{?\s*song\s*(\d+)\b(.*?)\}?\s*$", re.S | re.I)
+_TC_AT_END = re.compile(r"(?:^|\s)((?:\d{1,2}:)?\d{1,2}:\d{2})\s*$")
 
 
 # ---------------------------------------------------------------- helpers
@@ -82,22 +81,34 @@ class Song:
 
 
 def parse_song_note(note: str) -> Song | None:
-    """'Song 1 Orig//Local 09:35' or the three-line form."""
-    if not note.startswith(SONG_TOKEN):
-        return None
-    lines = [l.strip() for l in note.split("\n") if l.strip()]
-    if len(lines) >= 2:
-        return Song(lines[0], lines[1], "", lines[2] if len(lines) > 2 else "")
-    m = _SONG_NOTE.match(note)
+    """Read a song note in any of the forms translators use.
+
+    'Song 1 Orig//Local 09:35', 'song 4 30:49', '{song 4 30:49}', 'Song 4', or the
+    three-line form 'Song 1' / 'Orig//Local' / '09:35'. The mark is normalised to
+    'Song N', which the macro and Iyuno's system look for.
+    """
+    m = _SONG_START.match(note.strip())
     if not m:
         return None
-    return Song(m.group(1), m.group(2).strip(), "", m.group(3) or "")
+    mark = f"Song {int(m.group(1))}"
+    rest = [l.strip() for l in m.group(2).split("\n") if l.strip()]
+    titles, tc_out = "", ""
+    for i, line in enumerate(rest):
+        t = _TC_AT_END.search(line)
+        if t and (i == len(rest) - 1):
+            tc_out = t.group(1)
+            line = line[: t.start(1)].strip()
+        if line and not titles:
+            titles = line
+    return Song(mark, titles, "", tc_out)
 
 
 def song_note(song: Song, long: bool) -> str:
+    """Long form is always three paragraphs (mark, titles, TC out): the macro reads
+    them by position, so an unknown title stays an empty line."""
     if not long:
         return song.mark
-    return "\n".join(x for x in (song.mark, song.titles, song.tc_out) if x)
+    return "\n".join((song.mark, song.titles, song.tc_out))
 
 
 def transform(ep: Episode) -> tuple[list[ScriptRow], list[str]]:
@@ -123,18 +134,27 @@ def transform(ep: Episode) -> tuple[list[ScriptRow], list[str]]:
 
     # 3. Songs: find every song from its explicit note.
     songs: dict[str, Song] = {}
+    # Songs whose later lines already carry a short "Song N" note in the export: the
+    # translator marked every sung line, so trust that and infer nothing.
+    marked_by_export: set[str] = set()
     for r in rows:
         s = parse_song_note(r.note)
         if not s:
             continue
+        if s.mark in songs and not s.titles and not s.tc_out:
+            marked_by_export.add(s.mark)
         known = songs.setdefault(s.mark, s)
         if not known.tc_in:
             known.tc_in = r.tc
         if not known.tc_out and s.tc_out:
             known.tc_out = s.tc_out
+        if not known.titles and s.titles:
+            known.titles = s.titles
         known.singers.update(split_character_names(r.character))
 
     def in_song(sec: int | None, s: Song) -> bool:
+        if s.mark in marked_by_export:
+            return False
         a, b = tc_seconds(s.tc_in), tc_seconds(s.tc_out) if s.tc_out else None
         return sec is not None and a is not None and sec >= a and (b is None or sec <= b)
 
@@ -185,6 +205,9 @@ def transform(ep: Episode) -> tuple[list[ScriptRow], list[str]]:
     for s in songs.values():
         if not s.tc_out:
             warnings.append(f"{s.mark}: geen TC Out gevonden in de note.")
+        if not s.titles:
+            warnings.append(f"{s.mark}: geen titel (Origineel//Vertaald) in de note; "
+                            "de titelregel blijft leeg.")
     return rows, warnings
 
 
