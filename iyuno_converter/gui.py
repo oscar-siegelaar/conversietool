@@ -77,8 +77,23 @@ class App:
         self.go = ttk.Button(bottom, text="Make Word document…", command=self.save, state="disabled")
         self.go.pack(side="right")
         ttk.Button(bottom, text="Convert whole folder…", command=self.batch).pack(side="right", padx=8)
+        self.clear_btn = ttk.Button(bottom, text="Cancel / other file", command=self.reset, state="disabled")
+        self.clear_btn.pack(side="right")
 
     # ------------------------------------------------------------ loading
+    DROP_TEXT = "Drop a SyncScript export (.xlsx) here, or click to choose one"
+
+    def reset(self):
+        """Forget the current export so another one can be loaded."""
+        self.src = self.ep = None
+        self.drop.configure(text=self.DROP_TEXT)
+        for v in self.vars.values():
+            v.set("")
+        self.tree.delete(*self.tree.get_children())
+        self.go.configure(state="disabled")
+        self.clear_btn.configure(state="disabled")
+        self.status.configure(text="")
+
     def _enable_drop(self):
         try:
             from tkinterdnd2 import DND_FILES  # optional
@@ -99,7 +114,7 @@ class App:
             messagebox.showerror("Cannot read file", str(exc))
             return
         self.src, self.ep = Path(path), ep
-        self.drop.configure(text=f"{self.src.name}  –  {len(ep.rows)} rows")
+        self.drop.configure(text=f"{self.src.name}  –  {len(ep.rows)} rows   (click to choose another file)")
         cover = default_cover(ep)
         for key, _ in COVER_FIELDS:
             self.vars[key].set(getattr(cover, key))
@@ -109,6 +124,7 @@ class App:
                 continue
             self.tree.insert("", "end", iid=name, values=(name, info.original_name or name, gender_code(info.gender)))
         self.go.configure(state="normal")
+        self.clear_btn.configure(state="normal")
         self.status.configure(text="Check the cover data, the SDI auth code and the genders.")
 
     # ------------------------------------------------------------ editing
@@ -170,6 +186,7 @@ class App:
         if warnings:
             msg += "\n\nNote:\n- " + "\n- ".join(warnings)
         messagebox.showinfo("Done", msg)
+        self.reset()
 
 
 def _batch(app: "App"):
