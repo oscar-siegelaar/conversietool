@@ -158,7 +158,10 @@ def transform(ep: Episode) -> tuple[list[ScriptRow], list[str]]:
         if s.mark in marked_by_export:
             return False
         a, b = tc_seconds(s.tc_in), tc_seconds(s.tc_out) if s.tc_out else None
-        return sec is not None and a is not None and sec >= a and (b is None or sec <= b)
+        if a is not None and b is not None and b < a:
+            b += (a // 3600) * 3600  # 'mm:ss' TC Out in a script that runs from 01:00:00
+        # TC Out is where the song ends: a line starting there is no longer sung.
+        return sec is not None and a is not None and sec >= a and (b is None or sec < b)
 
     # Singers: flagged in the export or named on a row with a song note. A character
     # who is never heard outside a song (e.g. "Zanger") also sings, but only on rows

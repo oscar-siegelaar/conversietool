@@ -215,3 +215,17 @@ def test_song_note_without_separators():
     }.items():
         s = parse_song_note(note)
         assert (s.mark, s.titles, s.tc_out) == expected, note
+
+
+def test_line_at_tc_out_is_not_a_song_line():
+    from iyuno_converter.convert import transform
+    from iyuno_converter.reader import Episode, ScriptRow
+
+    ep = Episode(rows=[
+        ScriptRow("Stacy", "00:08:28", "", "Hé, Ferb!"),
+        ScriptRow("Koor", "00:08:31", "Song 4Dittie 3//Dittie308:39", "Vage kennissen"),
+        ScriptRow("Antonio", "00:08:39", "", "(HOESTEN)"),
+        ScriptRow("Ferb", "00:08:40", "", "Zeker."),
+    ])
+    rows, _ = transform(ep)
+    assert [r.note for r in rows] == ["", "Song 4\nDittie 3//Dittie3\n08:39", "", ""]
