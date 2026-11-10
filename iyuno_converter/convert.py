@@ -17,8 +17,10 @@ SONG_TOKEN = "Song "
 WORDS_PER_LINE = 8
 GENDER_CODES = {"male": "M", "female": "V", "male-female": "MV", "female-male": "MV"}
 
-_SONG_START = re.compile(r"^\{?\s*song\s*(\d+)\b(.*?)\}?\s*$", re.S | re.I)
-_TC_AT_END = re.compile(r"(?:^|\s)((?:\d{1,2}:)?\d{1,2}:\d{2})\s*$")
+# The number may run straight into the title: 'Song 1Dittie1//Dittie102:46'.
+_SONG_START = re.compile(r"^\{?\s*song\s*(\d+)(?!:)(.*?)\}?\s*$", re.S | re.I)
+# A TC at the end may also be glued to the title ('Dittie102:46' -> 02:46).
+_TC_AT_END = re.compile(r"((?:\d{1,2}:)?\d{2}:\d{2}|(?<!\d)\d:\d{2})\s*$")
 
 
 # ---------------------------------------------------------------- helpers

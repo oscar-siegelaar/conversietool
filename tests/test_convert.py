@@ -198,3 +198,20 @@ def test_cover_defaults_saved_and_applied(tmp_path, monkeypatch, export):
     assert cover.season == ep.season            # empty default keeps the export value
     assert cover.translated_by == ep.translator
     assert cover.auth_code == ""
+
+
+def test_song_note_without_separators():
+    from iyuno_converter.convert import parse_song_note, song_note
+
+    song = parse_song_note("Song 1Dittie1//Dittie102:46")
+    assert (song.mark, song.titles, song.tc_out) == ("Song 1", "Dittie1//Dittie1", "02:46")
+    assert song_note(song, long=True) == "Song 1\nDittie1//Dittie1\n02:46"
+    for note, expected in {
+        "Song 1 Orig//Local 09:35": ("Song 1", "Orig//Local", "09:35"),
+        "song 4 30:49": ("Song 4", "", "30:49"),
+        "{Song 2 Orig//Local 9:35}": ("Song 2", "Orig//Local", "9:35"),
+        "Song 3\nOrig//Local\n1:02:46": ("Song 3", "Orig//Local", "1:02:46"),
+        "Song 12": ("Song 12", "", ""),
+    }.items():
+        s = parse_song_note(note)
+        assert (s.mark, s.titles, s.tc_out) == expected, note
