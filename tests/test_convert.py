@@ -168,7 +168,8 @@ def test_series_from_broken_filenames():
 
     cases = {
         "Show A SShow AE01 Some Title": ("Show A", "", "1"),
-        "Project Name SOther Series 4E02 TITLE": ("Other Series 4", "", "2"),
+        "Show A SShow A Pet ShortsE102 Some Title": ("Show A", "", "102"),
+        "Project Name SOther Series 4E02 TITLE": ("Project Name", "", "2"),
         "My Show S02E05 Title": ("My Show", "2", "5"),
         "Sam Show SSam ShowE03 x": ("Sam Show", "", "3"),
     }

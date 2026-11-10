@@ -103,7 +103,8 @@ def read_export(path: str | Path) -> Episode:
 def _guess_from_filename(ep: Episode, stem: str) -> None:
     """SyncScript names files '<project> S<season>E<episode> <title>'.
 
-    Often the series name sits where the season number should be, for example
+    The series title is the project name: the text before ' S'. Often the season
+    slot holds a name instead of a number, for example
     'Spellbound SSpellboundE01 Spellbound FTR' or
     'Zombies Addisons Monster Mystery SZombies 4E01 ZOMBIES 4- ...'.
     """
@@ -119,10 +120,12 @@ def _guess_from_filename(ep: Episode, stem: str) -> None:
     prefix = stem[: m.start()]
     splits = [(prefix[: s.start()].strip(), prefix[s.end():].strip())
               for s in re.finditer(r"\s+S(?=\S)", prefix)]
-    for project, series in splits:
-        if project == series:
-            ep.series_title = series
+    # Best: the name after the S starts with the project name again.
+    for project, after in splits:
+        if project and after.startswith(project):
+            ep.series_title = project
             return
-    plausible = [series for _, series in splits if series[:1].isupper() or series[:1].isdigit()]
-    if plausible:
-        ep.series_title = plausible[0]
+    for project, after in splits:
+        if project and (after[:1].isupper() or after[:1].isdigit()):
+            ep.series_title = project
+            return

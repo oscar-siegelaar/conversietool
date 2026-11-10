@@ -15,6 +15,7 @@ def default_cover(ep: Episode, defaults: dict[str, str] | None = None) -> CoverI
         original_title=ep.original_title,
         translated_title=ep.translated_title,
         series_title=ep.series_title,
+        translated_series_title=ep.series_title,
         season=ep.season,
         episode=ep.episode,
         translated_by=ep.translator,
