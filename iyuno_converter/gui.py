@@ -8,9 +8,12 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import __version__
 from .convert import gender_code
-from .pipeline import convert, convert_folder, default_cover, default_output_name
+from .naming import DEFAULT_TEMPLATE as NAME_DEFAULT, LABELS as NAME_LABELS, STYLES
+from .pipeline import convert, convert_folder, default_cover, output_name
 from .reader import Episode, read_export
-from .settings import DEFAULT_FIELDS, load_defaults, save_defaults, settings_path
+from .settings import (DEFAULT_FIELDS, load_defaults, load_filename_template, save_defaults,
+                       save_filename_template, settings_path)
+from .writer import CoverInfo
 
 COVER_FIELDS = [
     ("original_title", "Original title"),
@@ -86,26 +89,46 @@ class App:
     def _build_menu(self):
         menubar = tk.Menu(self.root)
         settings = tk.Menu(menubar, tearoff=0)
-        settings.add_command(label="Cover page defaults…", command=self.edit_defaults)
+        settings.add_command(label="Cover page defaults…", command=lambda: self.edit_settings(0))
+        settings.add_command(label="Document name…", command=lambda: self.edit_settings(1))
         menubar.add_cascade(label="Settings", menu=settings)
         self.root.config(menu=menubar)
         try:  # macOS: also under the app menu as Settings… (Cmd+,)
-            self.root.createcommand("tk::mac::ShowPreferences", self.edit_defaults)
+            self.root.createcommand("tk::mac::ShowPreferences", lambda: self.edit_settings(0))
         except tk.TclError:
             pass
 
-    def edit_defaults(self):
-        """Window to save default values for the cover page."""
+    def _form_cover(self) -> CoverInfo:
+        """The cover as the form shows it now (or an example when no file is open)."""
+        if self.ep:
+            cover = default_cover(self.ep)
+            for key, _ in COVER_FIELDS:
+                setattr(cover, key, self.vars[key].get().strip())
+            cover.language = cover.language or "Dutch"
+            return cover
+        return CoverInfo(original_title="Puppy Pool Party", translated_title="Puppy Pool Party",
+                         series_title="Minnie's Bow-Toons", translated_series_title="Minnie's Bow-Toons",
+                         episode="102", translated_by="Mark Omvlee")
+
+    def edit_settings(self, tab: int = 0):
+        """Settings window: cover page defaults and the document name."""
         win = tk.Toplevel(self.root)
-        win.title("Cover page defaults")
+        win.title("Settings")
         win.transient(self.root)
         win.resizable(False, False)
-        frame = ttk.Frame(win, padding=12)
-        frame.pack(fill="both", expand=True)
+        outer = ttk.Frame(win, padding=10)
+        outer.pack(fill="both", expand=True)
+        nb = ttk.Notebook(outer)
+        nb.pack(fill="both", expand=True)
+
+        # --- tab 1: cover page defaults
+        frame = ttk.Frame(nb, padding=12)
+        nb.add(frame, text="Cover page defaults")
         ttk.Label(
             frame,
             text="These values are filled in on every cover page. A filled-in default\n"
-                 "replaces what the export says; leave a field empty to keep the export's value.",
+                 "replaces what the export says; leave a field empty to keep the export's value.\n"
+                 "The SDI auth code is kept only on this computer.",
             justify="left",
         ).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 8))
         current = load_defaults()
@@ -113,13 +136,56 @@ class App:
         for i, (key, label) in enumerate(DEFAULT_FIELDS, start=1):
             ttk.Label(frame, text=label).grid(row=i, column=0, sticky="w", padx=4, pady=2)
             v = tk.StringVar(value=current.get(key, ""))
-            ttk.Entry(frame, textvariable=v, width=40).grid(row=i, column=1, sticky="we", padx=4, pady=2)
+            ttk.Entry(frame, textvariable=v, width=48).grid(row=i, column=1, sticky="we", padx=4, pady=2)
             values[key] = v
+
+        # --- tab 2: document name
+        nframe = ttk.Frame(nb, padding=12)
+        nb.add(nframe, text="Document name")
+        ttk.Label(
+            nframe,
+            text="Build the file name from the cover fields. Choose a style, then click a field\n"
+                 "to add it where the cursor is. Type anything else (such as _ or -) in between.",
+            justify="left",
+        ).grid(row=0, column=0, columnspan=3, sticky="w", pady=(0, 8))
+        tpl = tk.StringVar(value=load_filename_template())
+        entry = ttk.Entry(nframe, textvariable=tpl, width=70)
+        entry.grid(row=1, column=0, columnspan=3, sticky="we", pady=(0, 6))
+        ttk.Label(nframe, text="Style").grid(row=2, column=0, sticky="w")
+        style = ttk.Combobox(nframe, state="readonly", width=14, values=[name for _, name in STYLES])
+        style.current(0)
+        style.grid(row=2, column=1, sticky="w", pady=2)
+        buttons_box = ttk.Frame(nframe)
+        buttons_box.grid(row=3, column=0, columnspan=3, sticky="w", pady=4)
+
+        def add_label(label: str):
+            code = STYLES[style.current()][0]
+            entry.insert("insert", f"[{label}:{code}]" if code else f"[{label}]")
+            entry.focus()
+
+        for n, (label, _) in enumerate(NAME_LABELS):
+            ttk.Button(buttons_box, text=label.title(), command=lambda l=label: add_label(l)).grid(
+                row=n // 3, column=n % 3, sticky="we", padx=2, pady=2)
+        preview = ttk.Label(nframe, text="", foreground="#1d6b2f")
+        ttk.Label(nframe, text="Example").grid(row=4, column=0, sticky="w", pady=(8, 0))
+        preview.grid(row=4, column=1, columnspan=2, sticky="w", pady=(8, 0))
+        ttk.Button(nframe, text="Back to default",
+                   command=lambda: tpl.set(NAME_DEFAULT)).grid(row=5, column=0, sticky="w", pady=(8, 0))
+
+        def update_preview(*_):
+            cover = self._form_cover()
+            if values["auth_code"].get().strip():
+                cover.auth_code = values["auth_code"].get().strip()
+            preview.configure(text=output_name(cover, tpl.get()))
+
+        tpl.trace_add("write", update_preview)
+        update_preview()
 
         def save():
             data = {k: v.get() for k, v in values.items()}
             try:
                 save_defaults(data)
+                save_filename_template(tpl.get() or NAME_DEFAULT)
             except OSError as exc:
                 messagebox.showerror("Cannot save settings", f"{settings_path()}\n\n{exc}", parent=win)
                 return
@@ -129,10 +195,11 @@ class App:
                         self.vars[key].set(value.strip())
             win.destroy()
 
-        buttons = ttk.Frame(frame)
-        buttons.grid(row=len(DEFAULT_FIELDS) + 1, column=0, columnspan=2, sticky="e", pady=(10, 0))
+        buttons = ttk.Frame(outer)
+        buttons.pack(fill="x", pady=(10, 0))
         ttk.Button(buttons, text="Cancel", command=win.destroy).pack(side="right")
         ttk.Button(buttons, text="Save", command=save).pack(side="right", padx=6)
+        nb.select(tab)
         win.bind("<Escape>", lambda e: win.destroy())
         win.grab_set()
 
@@ -218,7 +285,8 @@ class App:
             setattr(cover, key, self.vars[key].get().strip())
         cover.language = cover.language or "Dutch"
         if not cover.auth_code and not messagebox.askyesno(
-            "No SDI auth code", "The SDI auth code is empty. Iyuno's macro and system need it. Continue anyway?"
+            "No SDI auth code", "The SDI auth code is empty. Iyuno's system needs it.\n\n"
+            "Tip: enter it once under Settings › Cover page defaults.\n\nContinue anyway?"
         ):
             return
         for iid in self.tree.get_children():
@@ -229,7 +297,7 @@ class App:
         out = filedialog.asksaveasfilename(
             defaultextension=".docx",
             initialdir=str(self.src.parent),
-            initialfile=default_output_name(self.ep, cover.language or "Dutch"),
+            initialfile=output_name(cover, load_filename_template()),
             filetypes=[("Word", "*.docx")],
         )
         if not out:
@@ -252,7 +320,7 @@ def _batch(app: "App"):
         return
     app.status.configure(text="Converting…")
     app.root.update_idletasks()
-    out_dir, report = convert_folder(folder, defaults=load_defaults())
+    out_dir, report = convert_folder(folder, defaults=load_defaults(), template=load_filename_template())
     ok = sum(1 for r in report if r.startswith("OK"))
     app.status.configure(text=f"{ok} of {len(report)} converted")
     messagebox.showinfo(

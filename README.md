@@ -38,12 +38,24 @@ The window has a **Convert whole folder…** button for test runs. It converts e
 `.xlsx` in a folder into a subfolder `iyuno-word` and writes `rapport.txt` with one line
 per file.
 
-**Settings › Cover page defaults…** (on macOS also *Settings…* in the app menu, Cmd+,)
-saves default values for series title, translated series title, season, language and
-translator. A filled-in default replaces what the export says, in the window, in folder
-conversions and on the command line. The values are kept per user in
+**Settings** (on macOS also *Settings…* in the app menu, Cmd+,) has two tabs:
+
+- **Cover page defaults**: default values for series title, translated series title,
+  season, language, translator and the SDI auth code. A filled-in default replaces what
+  the export says, in the window, in folder conversions and on the command line.
+- **Document name**: a template for the file name, built from labels such as
+  `[LANGUAGE:upper]_[ORIGINAL TITLE]_[TRANSLATED BY:initials]` (the default, giving
+  `DUTCH_Puppy Pool Party_MO`). Characters Mac or Windows do not allow are replaced
+  (`:` becomes ` -`, `/ \ * ? " < > |` become `_`). Folder conversions use the same
+  template per export; a name already taken gets `_2`, `_3`, …
+
+Settings are kept per user in
 `~/Library/Application Support/Iyuno Converter/settings.json` (macOS) or
-`%APPDATA%\Iyuno Converter\settings.json` (Windows). The SDI auth code is never stored.
+`%APPDATA%\Iyuno Converter\settings.json` (Windows). The SDI auth code is stored only
+there, never in the app or the repository.
+
+The statistics pages sit between the cover and the script, in their own section, as the
+macro placed them. The script stays the last table and starts at page 1.
 
 ```bash
 pip install -e .            # or: pip install openpyxl python-docx

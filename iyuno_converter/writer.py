@@ -8,7 +8,6 @@ from importlib import resources
 from pathlib import Path
 
 import docx
-from docx.enum.section import WD_SECTION
 from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
@@ -195,10 +194,11 @@ def write_document(
             _set_cell_lines(_Cell(tc, script), value)
     proto.getparent().remove(proto)
 
-    # Statistics in a new section, like the macro.
-    sect = doc.add_section(WD_SECTION.NEW_PAGE)
-    for el in sect._sectPr.findall(qn("w:pgNumType")):  # continue page numbers
-        sect._sectPr.remove(el)
+    # Statistics in their own section between the cover and the script, like the
+    # macro (it inserts a section break right before the script table). Build them
+    # at the end of the body first, then move them in front of the script table.
+    doc_body = doc.element.body
+    first_new = len(doc_body) - 1  # new elements go before the body's final sectPr
     _heading(doc, STATS_TITLE, 14, center=True, space_before=False)
     doc.add_paragraph()
 
@@ -253,6 +253,20 @@ def write_document(
     r = p.add_run("Statistics timestamp: " + now.strftime("%Y-%m-%d %H:%M:%S"))
     r.font.name = "Arial"
     r.font.size = Pt(8)
+
+    script_tbl = script._tbl
+    for el in list(doc_body)[first_new:-1]:
+        script_tbl.addprevious(el)
+    # Section break after the statistics: same page setup and headers as the script
+    # section; page numbers continue, the script section itself restarts at 1.
+    sect_pr = copy.deepcopy(doc_body.find(qn("w:sectPr")))
+    for el in sect_pr.findall(qn("w:pgNumType")):
+        sect_pr.remove(el)
+    brk = OxmlElement("w:p")
+    ppr = OxmlElement("w:pPr")
+    ppr.append(sect_pr)
+    brk.append(ppr)
+    script_tbl.addprevious(brk)
 
     out_path = Path(out_path)
     doc.save(out_path)

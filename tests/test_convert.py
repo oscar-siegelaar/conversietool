@@ -109,14 +109,16 @@ def test_full_document(export, tmp_path):
     front = {r.cells[0].text.strip(): r.cells[1].text for r in d.tables[0].rows}
     assert front["ORIGINAL TITLE"] == "Original Title"
     assert front["SDI AUTH CODE"] == "ABC123"
-    script = d.tables[1]
+    script = d.tables[-1]    # the script is the last table, the macro relies on that
     assert [c.text for c in script.rows[0].cells] == ["Character", "TC", "Note", "TEXT"]
     assert len(script.rows) == 1 + 8
     note_cell = [r for r in script.rows if r.cells[1].text == "00:01:00"][0].cells[2]
     assert len(note_cell.paragraphs) == 3          # one paragraph per line, as the macro needs
-    heads = [t.rows[0].cells[0].text for t in d.tables[2:]]
+    heads = [t.rows[0].cells[0].text for t in d.tables[1:-1]]   # statistics before the script
     assert heads == ["Script name", "Insert number", "Song mark", "Banned word"]
-    chars = {r.cells[0].text: [c.text for c in r.cells] for r in d.tables[2].rows[1:]}
+    assert len(d.sections) == 3                     # cover, statistics, script
+    assert d.sections[2].start_type == 2            # new page
+    chars = {r.cells[0].text: [c.text for c in r.cells] for r in d.tables[1].rows[1:]}
     assert chars["Anna"][1:3] == ["Anne", "V"]
     assert chars["Koor"][2] == "MV"
 
@@ -124,10 +126,14 @@ def test_full_document(export, tmp_path):
 def test_convert_folder(export, tmp_path):
     from iyuno_converter.pipeline import convert_folder
     (export.parent / "broken.xlsx").write_text("not excel")
+    import shutil
+    shutil.copy(export, export.parent / "My Show S02E07 Pilot (kopie).xlsx")
     out_dir, report = convert_folder(export.parent, tmp_path / "out")
-    assert (out_dir / (export.stem + ".docx")).exists()
+    # named with the default template; the second export with the same data gets _2
+    assert (out_dir / "DUTCH_Original Title_TV.docx").exists()
+    assert (out_dir / "DUTCH_Original Title_TV_2.docx").exists()
     assert (out_dir / "rapport.txt").exists()
-    assert sorted(r.split()[0] for r in report) == ["FOUT", "OK"]
+    assert sorted(r.split()[0] for r in report) == ["FOUT", "OK", "OK"]
 
 
 @pytest.mark.parametrize("note, expected", [
@@ -187,9 +193,10 @@ def test_cover_defaults_saved_and_applied(tmp_path, monkeypatch, export):
     monkeypatch.setenv("IYUNO_CONVERTER_SETTINGS", str(tmp_path / "s" / "settings.json"))
     assert load_defaults() == {}
     save_defaults({"translated_series_title": "Mijn Serie", "language": "Flemish",
-                   "season": "", "auth_code": "never stored"})
+                   "season": "", "auth_code": " ABC123 ", "original_title": "not a default"})
     defaults = load_defaults()
-    assert defaults == {"translated_series_title": "Mijn Serie", "language": "Flemish"}
+    assert defaults == {"translated_series_title": "Mijn Serie", "language": "Flemish",
+                        "auth_code": "ABC123"}
 
     ep = read_export(export)
     cover = default_cover(ep, defaults)
@@ -197,7 +204,7 @@ def test_cover_defaults_saved_and_applied(tmp_path, monkeypatch, export):
     assert cover.language == "Flemish"
     assert cover.season == ep.season            # empty default keeps the export value
     assert cover.translated_by == ep.translator
-    assert cover.auth_code == ""
+    assert cover.auth_code == "ABC123"
 
 
 def test_song_note_without_separators():
@@ -229,3 +236,25 @@ def test_line_at_tc_out_is_not_a_song_line():
     ])
     rows, _ = transform(ep)
     assert [r.note for r in rows] == ["", "Song 4\nDittie 3//Dittie3\n08:39", "", ""]
+
+
+def test_filename_template(tmp_path, monkeypatch):
+    import datetime as dt
+    from iyuno_converter.naming import DEFAULT_TEMPLATE, initials, render, safe_filename
+    from iyuno_converter.settings import load_filename_template, save_defaults, save_filename_template
+    from iyuno_converter.writer import CoverInfo
+
+    cover = CoverInfo(original_title="ZOMBIES 4: DAWN OF THE VAMPIRE", language="Dutch",
+                      translated_by="Mark Omvlee - mark@example.com - 06-12", episode="1")
+    assert render(DEFAULT_TEMPLATE, cover) == "DUTCH_ZOMBIES 4 - DAWN OF THE VAMPIRE_MO"
+    cover.original_title = "No Slumber Party/The Ballad of Bubba Doof"
+    assert render("[LANGUAGE]_[SEASON]_[ORIGINAL TITLE:upper]_[EPISODE]_[DATE]", cover,
+                  dt.date(2026, 11, 11)) == "Dutch_NO SLUMBER PARTY_THE BALLAD OF BUBBA DOOF_1_11-11-2026"
+    assert initials("Jan van der Berg") == "JvdB"
+    assert safe_filename('a*b?c"d<e>f|g\\h. ') == "a_b_c_d_e_f_g_h"
+
+    monkeypatch.setenv("IYUNO_CONVERTER_SETTINGS", str(tmp_path / "settings.json"))
+    assert load_filename_template() == DEFAULT_TEMPLATE
+    save_filename_template("[EPISODE]-[TRANSLATED BY:initials]")
+    save_defaults({"language": "Flemish"})          # keeps the template
+    assert load_filename_template() == "[EPISODE]-[TRANSLATED BY:initials]"

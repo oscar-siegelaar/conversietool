@@ -12,14 +12,16 @@ from pathlib import Path
 
 APP_DIR = "Iyuno Converter"
 
-# Cover fields that make sense as a default. Titles, episode, date and the SDI auth
-# code differ per script (the auth code is issued per title), so they are left out.
+# Cover fields that make sense as a default. Titles, episode and date differ per
+# script, so they are left out. The SDI auth code is the same for every script; the
+# user enters it once and it is kept only in the settings file on this computer.
 DEFAULT_FIELDS = [
     ("series_title", "Series title"),
     ("translated_series_title", "Translated series title"),
     ("season", "Season #"),
     ("language", "Language"),
     ("translated_by", "Translated by"),
+    ("auth_code", "SDI auth code (from Iyuno)"),
 ]
 
 
@@ -36,21 +38,44 @@ def settings_path() -> Path:
     return base / APP_DIR / "settings.json"
 
 
-def load_defaults() -> dict[str, str]:
-    """The saved cover defaults; empty when nothing was saved or the file is unreadable."""
+def _load() -> dict:
     try:
         data = json.loads(settings_path().read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
-    cover = data.get("cover_defaults", {}) if isinstance(data, dict) else {}
+    return data if isinstance(data, dict) else {}
+
+
+def _save(data: dict) -> Path:
+    path = settings_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def load_defaults() -> dict[str, str]:
+    """The saved cover defaults; empty when nothing was saved or the file is unreadable."""
+    cover = _load().get("cover_defaults", {})
+    if not isinstance(cover, dict):
+        return {}
     keys = {k for k, _ in DEFAULT_FIELDS}
     return {k: str(v).strip() for k, v in cover.items() if k in keys and str(v).strip()}
 
 
 def save_defaults(values: dict[str, str]) -> Path:
-    path = settings_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
     keys = {k for k, _ in DEFAULT_FIELDS}
-    clean = {k: v.strip() for k, v in values.items() if k in keys and v.strip()}
-    path.write_text(json.dumps({"cover_defaults": clean}, indent=2, ensure_ascii=False), encoding="utf-8")
-    return path
+    data = _load()
+    data["cover_defaults"] = {k: v.strip() for k, v in values.items() if k in keys and v.strip()}
+    return _save(data)
+
+
+def load_filename_template() -> str:
+    from .naming import DEFAULT_TEMPLATE
+    value = _load().get("filename_template")
+    return value.strip() if isinstance(value, str) and value.strip() else DEFAULT_TEMPLATE
+
+
+def save_filename_template(template: str) -> Path:
+    data = _load()
+    data["filename_template"] = template.strip()
+    return _save(data)

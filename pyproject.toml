@@ -1,6 +1,6 @@
 [project]
 name = "iyuno-converter"
-version = "0.1.4"
+version = "0.2.0"
 description = "Convert a SyncScript Excel export into an Iyuno (SDI) Word script"
 requires-python = ">=3.10"
 dependencies = ["openpyxl>=3.1", "python-docx>=1.1"]
